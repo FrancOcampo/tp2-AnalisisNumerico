@@ -1,178 +1,171 @@
-# Python
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
-# Your code goes here
-image1 = cv2.imread('im1_tp2.jpg')
-image2 = cv2.imread('im2_tp2.jpg')
+# # Rutas completas a las imágenes (ajusta estas rutas según tu sistema)
+# ruta_imagen1 = 'C:/Users/Miguel/Desktop/anumerico/AnalisisNumerico/tp2-AnalisisNumerico/im1_tp2.jpg'
+# ruta_imagen2 = 'C:/Users/Miguel/Desktop/anumerico/AnalisisNumerico/tp2-AnalisisNumerico/im2_tp2.jpg'
 
-# Convert the image to hsv
-hsv_im1 = cv2.cvtColor(image1, cv2.COLOR_BGR2HSV)
-hsv_im2 = cv2.cvtColor(image2, cv2.COLOR_BGR2HSV)
+# Leer las imágenes
+imagen1 = cv2.imread("im1_tp2.jpg")
+imagen2 = cv2.imread("im2_tp2.jpg")
 
-# ----------------------------------------------------------------
-# #Splitting the channels
-# h1, s1, v1 = cv2.split(hsv_im1)
-# h2, s2, v2 = cv2.split(hsv_im2)
+# Convertir las imágenes a HSV
+hsv_imagen1 = cv2.cvtColor(imagen1, cv2.COLOR_BGR2HSV)
+hsv_imagen2 = cv2.cvtColor(imagen2, cv2.COLOR_BGR2HSV)
 
-# #showing the images
-#     #image1
-# cv2.imshow('hue 1', h1)
-# cv2.imshow('saturation 1', s1)
-# cv2.imshow('value 1', v1)
-#     #image2
-# cv2.imshow('hue 2', h2)
-# cv2.imshow('saturation 2', s2)
-# cv2.imshow('value 2', v2)
+# Umbralizar las imágenes
+limite_inferior_amarillo = np.array([20, 75, 75])  # límite inferior para el amarillo
+limite_superior_amarillo = np.array([30, 255, 255])  # límite superior para el amarillo
 
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-# ----------------------------------------------------------------
-# threshold the images
-lower_yellow = np.array([20, 75, 75]) #lower bound for yellow 20 from 0 to 180, 100 from 0 to 255, 100 from 0 to 255, 100 from 0 to 255
-upper_yellow = np.array([30, 255, 255]) #upper bound for yellow 30 from 0 to 180, 255 from 0 to 255, 255 from 0 to 255, 255 from 0 to 255
+# Crear la máscara para el color amarillo
+mascara1 = cv2.inRange(hsv_imagen1, limite_inferior_amarillo, limite_superior_amarillo)
+mascara2 = cv2.inRange(hsv_imagen2, limite_inferior_amarillo, limite_superior_amarillo)
 
-#mask the yellow color
-mask1 = cv2.inRange(hsv_im1, lower_yellow, upper_yellow)
-mask2 = cv2.inRange(hsv_im2, lower_yellow, upper_yellow)
+# Extraer el canal de saturación
+saturacion1 = hsv_imagen1[:, :, 1]
+saturacion2 = hsv_imagen2[:, :, 1]
 
-#3)----extract the saturation channel
-saturation1 = hsv_im1[:,:,1]
-saturation2 = hsv_im2[:,:,1]
+# Aplicar la máscara
+mascarilla1 = cv2.bitwise_and(saturacion1, saturacion1, mask=mascara1)
+mascarilla2 = cv2.bitwise_and(saturacion2, saturacion2, mask=mascara2)
 
-#apply the mask
-masked1 = cv2.bitwise_and(saturation1, saturation1, mask = mask1)
-masked2 = cv2.bitwise_and(saturation2, saturation2, mask = mask2)
+# Detectar los bordes
+bordes1 = cv2.Sobel(mascara1, cv2.CV_64F, 1, 1, ksize=7)
+bordes2 = cv2.Sobel(mascara2, cv2.CV_64F, 1, 1, ksize=7)  # impar para asegurar el píxel central
 
-
-
-#detect the edges
-edges1= cv2.Sobel(masked1, cv2.CV_64F, 1, 1, ksize=7)
-edges2= cv2.Sobel(masked2, cv2.CV_64F, 1, 1, ksize=7)# odd to ensure the center pixel
-
-
-
-#4)----create structuring element
+# Crear un elemento estructurante
 kernel = np.ones((7,7), np.uint8)
 
-#dilate the edges
-dilated1 = cv2.dilate(edges1, kernel, iterations=1)
-dilated2 = cv2.dilate(edges2, kernel, iterations=1)
+# Dilatar los bordes
+bordes_dilatados1 = cv2.dilate(bordes1, kernel, iterations=1)
+bordes_dilatados2 = cv2.dilate(bordes2, kernel, iterations=1)
 
+# Cerrar los bordes
+bordes_cerrados1 = cv2.morphologyEx(bordes_dilatados1, cv2.MORPH_CLOSE, kernel)
+bordes_cerrados2 = cv2.morphologyEx(bordes_dilatados2, cv2.MORPH_CLOSE, kernel)
 
-#Close the edges
-closed1 = cv2.morphologyEx(dilated1, cv2.MORPH_CLOSE, kernel)
-closed2 = cv2.morphologyEx(dilated2, cv2.MORPH_CLOSE, kernel)
+# Encontrar los contornos
+contornos1, _ = cv2.findContours(bordes_cerrados1.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+contornos2, _ = cv2.findContours(bordes_cerrados2.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
+# Rellenar el área
+area_rellenada1 = cv2.drawContours(bordes_cerrados1, contornos1, -1, (255, 255, 255), thickness=cv2.FILLED)
+area_rellenada2 = cv2.drawContours(bordes_cerrados2, contornos2, -1, (255, 255, 255), thickness=cv2.FILLED)
 
-# cv2.imshow('masked1', closed1)
-# cv2.imshow('masked2', closed2)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
+# Calcular el área amarilla
+area_amarilla1 = np.sum(area_rellenada1 == 255)
+area_total1 = imagen1.shape[0] * imagen1.shape[1]
+proporcion_area_amarilla1 = area_amarilla1 / area_total1
 
-#5)----find the contours
-contours1, _ = cv2.findContours(closed1.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-contours2, _ = cv2.findContours(closed2.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+area_amarilla2 = np.sum(area_rellenada2 == 255)
+area_total2 = imagen2.shape[0] * imagen2.shape[1]
+proporcion_area_amarilla2 = area_amarilla2 / area_total2
 
-#fill the area
-filled_image1 = cv2.drawContours(closed1, contours1, -1, (255, 255, 255), thickness=cv2.FILLED)
-filled_image2 = cv2.drawContours(closed2, contours2, -1, (255, 255, 255), thickness=cv2.FILLED)
+print(f"Área total amarilla en imagen 1: {area_amarilla1}, que es el {round(proporcion_area_amarilla1*100,2)}% del área total")
+print(f"Área total amarilla en imagen 2: {area_amarilla2}, que es el {round(proporcion_area_amarilla2*100,2)}% del área total")
 
-# cv2.imshow('masked1', filled_image1)
-# cv2.imshow('masked2', filled_image2)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
+# Extraer el canal de valor
+canal_valor1 = hsv_imagen1[:, :, 2]
+canal_valor2 = hsv_imagen2[:, :, 2]
 
-#calculate the yellow area
-yellow_area1 = np.sum(filled_image1 == 255)
-total_area1 = image1.shape[0] * image1.shape[1]
-yellow_area_ratio1 = yellow_area1 / total_area1
+# Integrar el canal de valor
+intensidad_amarilla1 = np.sum(canal_valor1[mascara1 == 255])
+intensidad_amarilla2 = np.sum(canal_valor2[mascara2 == 255])
 
-yellow_area2 = np.sum(filled_image2 == 255)
-total_area2 = image2.shape[0] * image2.shape[1]
-yellow_area_ratio2 = yellow_area2 / total_area2
+print(f"Intensidad total del amarillo en imagen 1: {intensidad_amarilla1}")
+print(f"Intensidad total del amarillo en imagen 2: {intensidad_amarilla2}")
 
-print(f"total yellow area in image 1: {yellow_area1}, it is its {round(yellow_area_ratio1*100,2)}% of the total area")
-print(f"total yellow area in image 2: {yellow_area2}, it is its {round(yellow_area_ratio2*100,2)}% of the total area")
+# Otra técnica: Transformada de Fourier
+# Convertir la imagen a escala de grises
+imagen_gris1 = cv2.cvtColor(imagen1, cv2.COLOR_BGR2GRAY)
+imagen_gris2 = cv2.cvtColor(imagen2, cv2.COLOR_BGR2GRAY)
 
-#6)----extract the value channel
-value1_channel = hsv_im1[:,:,2]
-value2_channel = hsv_im2[:,:,2]
+# Aplicar la transformada de Fourier
+transformada1 = np.fft.fft2(imagen_gris1)
+transformada2 = np.fft.fft2(imagen_gris2)
 
-#integrate the value channel
-yellow_intensity1= np.sum(value1_channel[mask1==255])
-yellow_intensity2= np.sum(value2_channel[mask2==255])
+transformada_shifted1 = np.fft.fftshift(transformada1)
+transformada_shifted2 = np.fft.fftshift(transformada2)
 
-print(f"Total Intensity of yellow in image 1: {yellow_intensity1}")
-print(f"Total Intensity of yellow in image 2: {yellow_intensity2}")
+espectro_magnitud1 = 20 * np.log(np.abs(transformada_shifted1))
+espectro_magnitud2 = 20 * np.log(np.abs(transformada_shifted2))
 
-#7)----other Technique FOURIER TRANSFORM
-#convert the image to gray
-gray_image1=cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
-gray_image2=cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+filas, columnas = imagen_gris1.shape
+fila_central, columna_central = filas // 2, columnas // 2
 
-#apply fourier transform
-f_transform1 = np.fft.fft2(gray_image1)
-f_transform2 = np.fft.fft2(gray_image2)
-
-f_transform1_shifted = np.fft.fftshift(f_transform1)
-f_transform2_shifted = np.fft.fftshift(f_transform2)
-
-magnitude_spectrum1 = 20*np.log(np.abs(f_transform1_shifted))
-magnitude_spectrum2 = 20*np.log(np.abs(f_transform2_shifted))
-
-rows, cols = gray_image1.shape
-crow, ccol = rows // 2, cols // 2
-
-# Crear un filtro pasa-bajo (LPF) en el centro, las bajas frecuencias son donde el color es mas uniforme.
-mask = np.ones((rows, cols), np.uint8)
-mask[crow+30:crow-30, ccol+30:ccol-30] = 0
+# Crear un filtro pasa-bajo (LPF) en el centro, las bajas frecuencias son donde el color es más uniforme.
+mascara_lpf = np.ones((filas, columnas), np.uint8)
+mascara_lpf[fila_central + 30:fila_central - 30, columna_central + 30:columna_central - 30] = 0
 
 # Aplicar el filtro en el dominio de la frecuencia
-f_transform1_shifted *= mask
+transformada_shifted1 *= mascara_lpf
+transformada_shifted2 *= mascara_lpf
 
 # Invertir la Transformada de Fourier
-f_ishift = np.fft.ifftshift(f_transform1_shifted)
-img_back = np.fft.ifft2(f_ishift)
-img_back = np.abs(img_back)
+transformada_invertida1 = np.fft.ifftshift(transformada_shifted1)
+transformada_invertida2 = np.fft.ifftshift(transformada_shifted2)
 
-# Mostrar la imagen filtrada
-plt.imshow(img_back, cmap='gray')
-plt.title('Imagen Filtrada con HPF')
+imagen_filtrada1 = np.fft.ifft2(transformada_invertida1)
+imagen_filtrada1 = np.abs(imagen_filtrada1)
+
+imagen_filtrada2 = np.fft.ifft2(transformada_invertida2)
+imagen_filtrada2 = np.abs(imagen_filtrada2)
+
+# Mostrar la imagen filtrada 1
+plt.imshow(imagen_filtrada1, cmap='gray')
+plt.title('Imagen 1 Filtrada con HPF')
 plt.show()
 
-# Mejorar la máscara usando la información de TF
-improved_mask = cv2.bitwise_and(mask, mask, mask=(img_back > np.mean(img_back)).astype(np.uint8))
+# Mejorar la máscara usando la información de la Transformada de Fourier 
+mascara_mejorada = cv2.bitwise_and(mascara_lpf, mascara_lpf, mask=(imagen_filtrada1 > np.mean(imagen_filtrada1)).astype(np.uint8))
 
-# Calcular el área del color amarillo mejorada
-yellow_area = np.sum(improved_mask == 255)
-total_area = image1.shape[0] * image1.shape[1]
-yellow_area_ratio = yellow_area / total_area
+# Calcular el área del color amarillo mejorada 
+area_amarilla_mejorada = np.sum(mascara_mejorada == 255)
+proporcion_area_mejorada = area_amarilla_mejorada / area_total1
+
 print('\n')
-print(f"total yellow area in image 1: {yellow_area1}, it is its {round(yellow_area_ratio1*100,2)}% of the total area")
-print(f"total yellow area in image 2: {yellow_area2}, it is its {round(yellow_area_ratio2*100,2)}% of the total area")
+print(f"Área total amarilla en imagen 1: {area_amarilla1}, que es el {round(proporcion_area_amarilla1*100,2)}% del área total")
+print(f"Área total amarilla en imagen 2: {area_amarilla2}, que es el {round(proporcion_area_amarilla2*100,2)}% del área total")
 
-
-#show the magnitude spectrum
-plt.imshow(magnitude_spectrum1, cmap='gray')
-plt.title('Magnitude Spectrum Image 1')
+# Mostrar el espectro de magnitud 1 
+plt.imshow(espectro_magnitud1, cmap='gray')
+plt.title('Espectro de Magnitud Imagen 1')
 plt.show()
 
 # Asegurarse de que la máscara mejorada esté en formato correcto
-improved_mask = improved_mask.astype(np.uint8)
+mascara_mejorada = mascara_mejorada.astype(np.uint8)
 
-# Multiplicar la máscara mejorada con la imagen original
-# result = cv2.bitwise_and(image1, image1, mask=improved_mask)
-result = cv2.bitwise_and(image1, image1, mask=mask1)
+# Multiplicar la máscara mejorada con la imagen original 
+resultado = cv2.bitwise_and(imagen1, imagen1, mask=mascara1)
 
-# Mostrar la imagen original y la imagen resultante
+resultado2 = cv2.bitwise_and(imagen2, imagen2, mask=mascara2)
+# Mostrar la imagen original y la imagen resultante 1
 plt.subplot(1, 2, 1)
-plt.imshow(cv2.cvtColor(image1, cv2.COLOR_BGR2RGB))
+plt.imshow(cv2.cvtColor(imagen1, cv2.COLOR_BGR2RGB))
 plt.title('Imagen Original')
 
 plt.subplot(1, 2, 2)
-plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+plt.imshow(cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB))
 plt.title('Área Amarilla Resaltada')
+plt.show()
 
+# Mostrar la imagen filtrada 2
+plt.imshow(imagen_filtrada2, cmap='gray')
+plt.title('Imagen 2 Filtrada con HPF')
+plt.show()
+
+# Mostrar el espectro de magnitud 2 
+plt.imshow(espectro_magnitud2, cmap='gray')
+plt.title('Espectro de Magnitud Imagen 2')
+plt.show()
+
+# Mostrar la imagen original y la imagen resultante 1
+plt.subplot(1, 2, 1)
+plt.imshow(cv2.cvtColor(imagen2, cv2.COLOR_BGR2RGB))
+plt.title('Imagen Original')
+
+plt.subplot(1, 2, 2)
+plt.imshow(cv2.cvtColor(resultado2, cv2.COLOR_BGR2RGB))
+plt.title('Área Amarilla Resaltada')
 plt.show()
