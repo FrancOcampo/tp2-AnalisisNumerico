@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
+import funcionF
+
 def sobel(image):
     # Definir las mascaras de Sobel
     Gx = np.array([[-1, 0, 1], 
@@ -63,29 +65,7 @@ def comparar_resultados(imagen, resultado):
 
     plt.show()
 
-def gaussian_lowpass(filas, columnas, d0):
-        # Calcular el centro de la imagen
-        fila_central = filas // 2
-        columna_central = columnas // 2
-        lpf = np.zeros((filas, columnas))
-        for i in range(filas):
-            for j in range(columnas):
-                distancia = np.sqrt((i - fila_central)**2 + (j - columna_central)**2)
-                lpf[i, j] = np.exp(-distancia**2 / (2 * d0**2))
-        return lpf
-
-def gaussian_highpass(filas, columnas, d0):
-    # Calcular el centro de la imagen
-    fila_central = filas // 2
-    columna_central = columnas // 2
-    hpf = np.zeros((filas, columnas))
-    for i in range(filas):
-        for j in range(columnas):
-            distancia = np.sqrt((i - fila_central)**2 + (j - columna_central)**2)
-            hpf[i, j] = 1 - np.exp(-distancia**2 / (2 * d0**2))
-    return hpf
-
-def analizar_imagen(ruta_imagen):
+def analizar_imagen(ruta_imagen, numero_imagen):
 
     imagen = cv2.imread(ruta_imagen)
 
@@ -129,11 +109,11 @@ def analizar_imagen(ruta_imagen):
     area_amarilla = np.sum(area_rellenada == 255)
     area_total = imagen.shape[0] * imagen.shape[1]
     proporcion_area_amarilla = area_amarilla / area_total
-    print(f"Área total amarilla en imagen 1: {area_amarilla}, que es el {round(proporcion_area_amarilla*100,2)}% del área total")
+    print(f"Área total amarilla en imagen {numero_imagen}: {area_amarilla}, que es el {round(proporcion_area_amarilla*100,2)}% del área total")
 
     # Integrar el canal de valor
     intensidad_amarilla = np.sum(v[mascara == 255])
-    print(f"Intensidad total del amarillo en imagen 1: {intensidad_amarilla}")
+    print(f"Intensidad total del amarillo en imagen {numero_imagen}: {intensidad_amarilla}")
 
     # Crear el resultado 
     resultado_mascara = cv2.bitwise_and(imagen, imagen, mask=mascara)
@@ -143,86 +123,19 @@ def analizar_imagen(ruta_imagen):
     mostrar_imagen([mascara_s, bordes, bordes_cerrados], ["Mascara en Saturacion", "Bordes", "Bordes cerrados"])
     comparar_resultados(imagen, imagen_con_mascara)
 
-    return area_amarilla, imagen
-
-def plot_spectrum(transformada):
-    # Obtén las frecuencias correspondientes a los valores de la transformada de Fourier
-    freqs = np.fft.fftfreq(len(transformada))
-
-    # Calcula la magnitud de la transformada de Fourier
-    magnitudes = np.abs(transformada)
-
-    # Traza la magnitud en función de la frecuencia
-    plt.plot(freqs, magnitudes)
-    plt.xlabel('Frecuencia')
-    plt.ylabel('Magnitud')
-    plt.title('Espectro de la transformada de Fourier')
-    plt.show()
-
-def consignaF(imagen):
-
-    gray_image1=cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
-
-    # Otra forma de suavizar la imagen es utilizando un filtro pasabajos en la transformada de fourier de las 3 matrices 
-    # Filtro al canal de saturacion----------------
-
-    transformada = np.fft.fft2(gray_image1) #aplicamos la transformada de fourier a la matriz de saturacion
-    transformada_centrada = np.fft.fftshift(transformada) #centramos la transformada
-    espectro_magnitud = 20 * np.log(np.abs(transformada_centrada)) #obtenemos el espectro de magnitud
-    filas, columnas = gray_image1.shape #obtenemos las dimensiones de la matriz
-    crow, ccol = filas // 2, columnas // 2 #obtenemos el centro de la matriz
-
-    # New code to display the magnitude spectrum
-    plt.figure(figsize=(6, 6))
-    plt.imshow(espectro_magnitud, cmap='gray')
-    plt.title('Magnitude Spectrum')
-    plt.colorbar()
-    plt.show()
-    # Crear un filtro pasa-bajo (LPF) en el centro, las bajas frecuencias son donde el color es más uniforme.
-    # Parámetros del filtro Gaussiano
-
-    # Usa la función para trazar el espectro de la transformada de Fourier
-    plot_spectrum(transformada_centrada)
-
-    d0=30
-
-    imagen_hp=gaussian_highpass(filas, columnas, d0)
-
-
-    # Aplicar el filtro en el dominio de la frecuencia
-    transformada_centrada *= imagen_hp
-
-
-    # # Crear un filtro pasa-bajo (LPF) en el centro, las bajas frecuencias son donde el color es mas uniforme.
-    # mascara = np.ones((filas, columnas), np.uint8)
-    # mascara[crow+30:crow-30, ccol+30:ccol-30] = 0
-
-    # # Aplicar el filtro en el dominio de la frecuencia
-    # transformada_centrada *= mascara
-
-    # Invertir la Transformada de Fourier
-    f_ishift = np.fft.ifftshift(transformada_centrada)
-    resultado = np.fft.ifft2(f_ishift)
-    resultado = np.abs(resultado)
-    resultado = resultado.astype(np.uint8)
-
-    # # Mostrar la imagen filtrada
-    # plt.imshow(img_back, cmap='gray')
-    # plt.title('Imagen Filtrada con HPF')
-    # plt.show()
-    # Mostrar la imagen filtrada
-    comparar_resultados(imagen, resultado)
+    return area_amarilla, imagen, mascara
 
 def main():
     # Analizar la primera imagen
-    area_amarilla1, imagen1 = analizar_imagen("im1_tp2.jpg")
-    area_amarilla2, imagen2 = analizar_imagen("im2_tp2.jpg")
+    area_amarilla1, imagen1, mascara1 = analizar_imagen("im1_tp2.jpg",1)
+    area_amarilla2, imagen2, mascara2 = analizar_imagen("im2_tp2.jpg",2)
     
     if area_amarilla1 > area_amarilla2:
         print("La primera imagen tiene un área amarilla más grande.")
     else:
         print("La segunda imagen tiene un área amarilla más grande.")
 
-    # consignaF(imagen)
+    funcionF.alternativa1_fourier(imagen1, mascara1)
+    funcionF.alternativa1_fourier(imagen2, mascara2)
 
 main()
