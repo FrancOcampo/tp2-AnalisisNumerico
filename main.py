@@ -2,170 +2,227 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
-# # Rutas completas a las imágenes (ajusta estas rutas según tu sistema)
-# ruta_imagen1 = 'C:/Users/Miguel/Desktop/anumerico/AnalisisNumerico/tp2-AnalisisNumerico/im1_tp2.jpg'
-# ruta_imagen2 = 'C:/Users/Miguel/Desktop/anumerico/AnalisisNumerico/tp2-AnalisisNumerico/im2_tp2.jpg'
+def sobel(image):
+    # Definir las mascaras de Sobel
+    Gx = np.array([[-1, 0, 1], 
+                    [-2, 0, 2], 
+                    [-1, 0, 1]], dtype=np.float32)
+    
+    Gy = np.array([[-1, -2, -1], 
+                   [0, 0, 0], 
+                   [1, 2, 1]], dtype=np.float32)
 
-# Leer las imágenes
-imagen1 = cv2.imread("im1_tp2.jpg")
-imagen2 = cv2.imread("im2_tp2.jpg")
+    # Obtener las dimensiones de la imagen
+    filas, columnas = image.shape
 
-# Convertir las imágenes a HSV
-hsv_imagen1 = cv2.cvtColor(imagen1, cv2.COLOR_BGR2HSV)
-hsv_imagen2 = cv2.cvtColor(imagen2, cv2.COLOR_BGR2HSV)
+    # Inicializar las matrices de gradiente
+    grad_x = np.zeros((filas, columnas), dtype=np.float32)
+    grad_y = np.zeros((filas, columnas), dtype=np.float32)
+    grad = np.zeros((filas, columnas), dtype=np.float32)
 
-# Umbralizar las imágenes
-limite_inferior_amarillo = np.array([20, 75, 75])  # límite inferior para el amarillo
-limite_superior_amarillo = np.array([30, 255, 255])  # límite superior para el amarillo
+    # Aplicar los kernels a la imagen
+    for i in range(1, filas-1):
+        for j in range(1, columnas-1):
+            region = image[i-1:i+2, j-1:j+2]
+            grad_x[i, j] = np.sum(Gx * region)
+            grad_y[i, j] = np.sum(Gy * region)
 
-# Crear la máscara para el color amarillo
-mascara1 = cv2.inRange(hsv_imagen1, limite_inferior_amarillo, limite_superior_amarillo)
-mascara2 = cv2.inRange(hsv_imagen2, limite_inferior_amarillo, limite_superior_amarillo)
+    # Calcular la magnitud del gradiente
+    grad = np.sqrt(grad_x**2 + grad_y**2)
+    grad = np.clip(grad, 0, 255)  # Limitar los valores entre 0 y 255
+    grad = grad.astype(np.uint8)
+    
+    return grad
 
-# Extraer el canal de saturación
-saturacion1 = hsv_imagen1[:, :, 1]
-saturacion2 = hsv_imagen2[:, :, 1]
+def mostrar_imagen(imagenes, titulos):
+    for i, image in enumerate(imagenes):
+        plt.subplot(1, len(imagenes), i+1)
+        plt.imshow(image)
+        # plt.imshow(image, cmap='gray') #con gris
+        plt.title(titulos[i])
+        plt.axis('off')
+    plt.show()
 
-# Aplicar la máscara
-mascarilla1 = cv2.bitwise_and(saturacion1, saturacion1, mask=mascara1)
-mascarilla2 = cv2.bitwise_and(saturacion2, saturacion2, mask=mascara2)
+def mostrar_imagenHSV(imagen):
 
-# Detectar los bordes
-bordes1 = cv2.Sobel(mascara1, cv2.CV_64F, 1, 1, ksize=7)
-bordes2 = cv2.Sobel(mascara2, cv2.CV_64F, 1, 1, ksize=7)  # impar para asegurar el píxel central
+    cv2.imshow('Imagen HSV', imagen)
 
-# Crear un elemento estructurante
-kernel = np.ones((7,7), np.uint8)
+    # Esperar a que se presione una tecla y luego cerrar las ventanas
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
-# Dilatar los bordes
-bordes_dilatados1 = cv2.dilate(bordes1, kernel, iterations=1)
-bordes_dilatados2 = cv2.dilate(bordes2, kernel, iterations=1)
+def comparar_resultados(imagen, resultado):
+    # Mostrar la imagen original y la imagen resultante
+    plt.subplot(1, 2, 1)
+    plt.imshow(cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB))
+    plt.title('Imagen Original')
 
-# Cerrar los bordes
-bordes_cerrados1 = cv2.morphologyEx(bordes_dilatados1, cv2.MORPH_CLOSE, kernel)
-bordes_cerrados2 = cv2.morphologyEx(bordes_dilatados2, cv2.MORPH_CLOSE, kernel)
+    plt.subplot(1, 2, 2)
+    plt.imshow(cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB))
+    plt.title('Área Amarilla Resaltada')
 
-# Encontrar los contornos
-contornos1, _ = cv2.findContours(bordes_cerrados1.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-contornos2, _ = cv2.findContours(bordes_cerrados2.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    plt.show()
 
-# Rellenar el área
-area_rellenada1 = cv2.drawContours(bordes_cerrados1, contornos1, -1, (255, 255, 255), thickness=cv2.FILLED)
-area_rellenada2 = cv2.drawContours(bordes_cerrados2, contornos2, -1, (255, 255, 255), thickness=cv2.FILLED)
+def gaussian_lowpass(filas, columnas, d0):
+        # Calcular el centro de la imagen
+        fila_central = filas // 2
+        columna_central = columnas // 2
+        lpf = np.zeros((filas, columnas))
+        for i in range(filas):
+            for j in range(columnas):
+                distancia = np.sqrt((i - fila_central)**2 + (j - columna_central)**2)
+                lpf[i, j] = np.exp(-distancia**2 / (2 * d0**2))
+        return lpf
 
-# Calcular el área amarilla
-area_amarilla1 = np.sum(area_rellenada1 == 255)
-area_total1 = imagen1.shape[0] * imagen1.shape[1]
-proporcion_area_amarilla1 = area_amarilla1 / area_total1
+def gaussian_highpass(filas, columnas, d0):
+    # Calcular el centro de la imagen
+    fila_central = filas // 2
+    columna_central = columnas // 2
+    hpf = np.zeros((filas, columnas))
+    for i in range(filas):
+        for j in range(columnas):
+            distancia = np.sqrt((i - fila_central)**2 + (j - columna_central)**2)
+            hpf[i, j] = 1 - np.exp(-distancia**2 / (2 * d0**2))
+    return hpf
 
-area_amarilla2 = np.sum(area_rellenada2 == 255)
-area_total2 = imagen2.shape[0] * imagen2.shape[1]
-proporcion_area_amarilla2 = area_amarilla2 / area_total2
+def analizar_imagen(ruta_imagen):
 
-print(f"Área total amarilla en imagen 1: {area_amarilla1}, que es el {round(proporcion_area_amarilla1*100,2)}% del área total")
-print(f"Área total amarilla en imagen 2: {area_amarilla2}, que es el {round(proporcion_area_amarilla2*100,2)}% del área total")
+    imagen = cv2.imread(ruta_imagen)
 
-# Extraer el canal de valor
-canal_valor1 = hsv_imagen1[:, :, 2]
-canal_valor2 = hsv_imagen2[:, :, 2]
+    # Convertir imagen a espacio hsv 
+    hsv_imagen = cv2.cvtColor(imagen, cv2.COLOR_BGR2HSV)
 
-# Integrar el canal de valor
-intensidad_amarilla1 = np.sum(canal_valor1[mascara1 == 255])
-intensidad_amarilla2 = np.sum(canal_valor2[mascara2 == 255])
+    # Definir limites para el espacio H para el valor amarillo
+    limite_inf_amarillo = np.array([20, 75, 75]) 
+    limite_sup_amarillo = np.array([40, 255, 255]) 
 
-print(f"Intensidad total del amarillo en imagen 1: {intensidad_amarilla1}")
-print(f"Intensidad total del amarillo en imagen 2: {intensidad_amarilla2}")
+    # Extraer canales H, S y V
+    h = hsv_imagen[:, :, 0]
+    s = hsv_imagen[:, :, 1]
+    v = hsv_imagen[:, :, 2]
 
-# Otra técnica: Transformada de Fourier
-# Convertir la imagen a escala de grises
-imagen_gris1 = cv2.cvtColor(imagen1, cv2.COLOR_BGR2GRAY)
-imagen_gris2 = cv2.cvtColor(imagen2, cv2.COLOR_BGR2GRAY)
+    # Crear mascara 
+    mascara = cv2.inRange(hsv_imagen, limite_inf_amarillo, limite_sup_amarillo)
 
-# Aplicar la transformada de Fourier
-transformada1 = np.fft.fft2(imagen_gris1)
-transformada2 = np.fft.fft2(imagen_gris2)
+    # Aplicar mascara al canal de saturacion 
+    mascara_s = cv2.bitwise_and(s, s, mask=mascara)
 
-transformada_shifted1 = np.fft.fftshift(transformada1)
-transformada_shifted2 = np.fft.fftshift(transformada2)
+    # Detectar bordes
+    bordes = sobel(mascara_s)
 
-espectro_magnitud1 = 20 * np.log(np.abs(transformada_shifted1))
-espectro_magnitud2 = 20 * np.log(np.abs(transformada_shifted2))
+    # Crear un elemento estructurante
+    kernel = np.ones((7,7), np.uint8)
 
-filas, columnas = imagen_gris1.shape
-fila_central, columna_central = filas // 2, columnas // 2
+    # Dilatar los bordes
+    bordes_dilatados = cv2.dilate(bordes, kernel, iterations=1)
 
-# Crear un filtro pasa-bajo (LPF) en el centro, las bajas frecuencias son donde el color es más uniforme.
-mascara_lpf = np.ones((filas, columnas), np.uint8)
-mascara_lpf[fila_central + 30:fila_central - 30, columna_central + 30:columna_central - 30] = 0
+    # Cerrar los bordes
+    bordes_cerrados = cv2.morphologyEx(bordes_dilatados, cv2.MORPH_CLOSE, kernel)
 
-# Aplicar el filtro en el dominio de la frecuencia
-transformada_shifted1 *= mascara_lpf
-transformada_shifted2 *= mascara_lpf
+    # Encontrar los contornos
+    contornos, _ = cv2.findContours(bordes_cerrados.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-# Invertir la Transformada de Fourier
-transformada_invertida1 = np.fft.ifftshift(transformada_shifted1)
-transformada_invertida2 = np.fft.ifftshift(transformada_shifted2)
+    # Rellenar el área
+    area_rellenada = cv2.drawContours(bordes_cerrados, contornos, -1, 255, thickness=cv2.FILLED)
 
-imagen_filtrada1 = np.fft.ifft2(transformada_invertida1)
-imagen_filtrada1 = np.abs(imagen_filtrada1)
+    # Calcular el area amarilla 
+    area_amarilla = np.sum(area_rellenada == 255)
+    area_total = imagen.shape[0] * imagen.shape[1]
+    proporcion_area_amarilla = area_amarilla / area_total
+    print(f"Área total amarilla en imagen 1: {area_amarilla}, que es el {round(proporcion_area_amarilla*100,2)}% del área total")
 
-imagen_filtrada2 = np.fft.ifft2(transformada_invertida2)
-imagen_filtrada2 = np.abs(imagen_filtrada2)
+    # Integrar el canal de valor
+    intensidad_amarilla = np.sum(v[mascara == 255])
+    print(f"Intensidad total del amarillo en imagen 1: {intensidad_amarilla}")
 
-# Mostrar la imagen filtrada 1
-plt.imshow(imagen_filtrada1, cmap='gray')
-plt.title('Imagen 1 Filtrada con HPF')
-plt.show()
+    # Crear el resultado 
+    resultado_mascara = cv2.bitwise_and(imagen, imagen, mask=mascara)
+    imagen_con_mascara = cv2.bitwise_and(imagen, imagen, mask=area_rellenada)
 
-# Mejorar la máscara usando la información de la Transformada de Fourier 
-mascara_mejorada = cv2.bitwise_and(mascara_lpf, mascara_lpf, mask=(imagen_filtrada1 > np.mean(imagen_filtrada1)).astype(np.uint8))
+    # Mostrar resultados
+    mostrar_imagen([mascara_s, bordes, bordes_cerrados], ["Mascara en Saturacion", "Bordes", "Bordes cerrados"])
+    comparar_resultados(imagen, imagen_con_mascara)
 
-# Calcular el área del color amarillo mejorada 
-area_amarilla_mejorada = np.sum(mascara_mejorada == 255)
-proporcion_area_mejorada = area_amarilla_mejorada / area_total1
+    return area_amarilla, imagen
 
-print('\n')
-print(f"Área total amarilla en imagen 1: {area_amarilla1}, que es el {round(proporcion_area_amarilla1*100,2)}% del área total")
-print(f"Área total amarilla en imagen 2: {area_amarilla2}, que es el {round(proporcion_area_amarilla2*100,2)}% del área total")
+def plot_spectrum(transformada):
+    # Obtén las frecuencias correspondientes a los valores de la transformada de Fourier
+    freqs = np.fft.fftfreq(len(transformada))
 
-# Mostrar el espectro de magnitud 1 
-plt.imshow(espectro_magnitud1, cmap='gray')
-plt.title('Espectro de Magnitud Imagen 1')
-plt.show()
+    # Calcula la magnitud de la transformada de Fourier
+    magnitudes = np.abs(transformada)
 
-# Asegurarse de que la máscara mejorada esté en formato correcto
-mascara_mejorada = mascara_mejorada.astype(np.uint8)
+    # Traza la magnitud en función de la frecuencia
+    plt.plot(freqs, magnitudes)
+    plt.xlabel('Frecuencia')
+    plt.ylabel('Magnitud')
+    plt.title('Espectro de la transformada de Fourier')
+    plt.show()
 
-# Multiplicar la máscara mejorada con la imagen original 
-resultado = cv2.bitwise_and(imagen1, imagen1, mask=mascara1)
+def consignaF(imagen):
 
-resultado2 = cv2.bitwise_and(imagen2, imagen2, mask=mascara2)
-# Mostrar la imagen original y la imagen resultante 1
-plt.subplot(1, 2, 1)
-plt.imshow(cv2.cvtColor(imagen1, cv2.COLOR_BGR2RGB))
-plt.title('Imagen Original')
+    gray_image1=cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
 
-plt.subplot(1, 2, 2)
-plt.imshow(cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB))
-plt.title('Área Amarilla Resaltada')
-plt.show()
+    # Otra forma de suavizar la imagen es utilizando un filtro pasabajos en la transformada de fourier de las 3 matrices 
+    # Filtro al canal de saturacion----------------
 
-# Mostrar la imagen filtrada 2
-plt.imshow(imagen_filtrada2, cmap='gray')
-plt.title('Imagen 2 Filtrada con HPF')
-plt.show()
+    transformada = np.fft.fft2(gray_image1) #aplicamos la transformada de fourier a la matriz de saturacion
+    transformada_centrada = np.fft.fftshift(transformada) #centramos la transformada
+    espectro_magnitud = 20 * np.log(np.abs(transformada_centrada)) #obtenemos el espectro de magnitud
+    filas, columnas = gray_image1.shape #obtenemos las dimensiones de la matriz
+    crow, ccol = filas // 2, columnas // 2 #obtenemos el centro de la matriz
 
-# Mostrar el espectro de magnitud 2 
-plt.imshow(espectro_magnitud2, cmap='gray')
-plt.title('Espectro de Magnitud Imagen 2')
-plt.show()
+    # New code to display the magnitude spectrum
+    plt.figure(figsize=(6, 6))
+    plt.imshow(espectro_magnitud, cmap='gray')
+    plt.title('Magnitude Spectrum')
+    plt.colorbar()
+    plt.show()
+    # Crear un filtro pasa-bajo (LPF) en el centro, las bajas frecuencias son donde el color es más uniforme.
+    # Parámetros del filtro Gaussiano
 
-# Mostrar la imagen original y la imagen resultante 1
-plt.subplot(1, 2, 1)
-plt.imshow(cv2.cvtColor(imagen2, cv2.COLOR_BGR2RGB))
-plt.title('Imagen Original')
+    # Usa la función para trazar el espectro de la transformada de Fourier
+    plot_spectrum(transformada_centrada)
 
-plt.subplot(1, 2, 2)
-plt.imshow(cv2.cvtColor(resultado2, cv2.COLOR_BGR2RGB))
-plt.title('Área Amarilla Resaltada')
-plt.show()
+    d0=30
+
+    imagen_hp=gaussian_highpass(filas, columnas, d0)
+
+
+    # Aplicar el filtro en el dominio de la frecuencia
+    transformada_centrada *= imagen_hp
+
+
+    # # Crear un filtro pasa-bajo (LPF) en el centro, las bajas frecuencias son donde el color es mas uniforme.
+    # mascara = np.ones((filas, columnas), np.uint8)
+    # mascara[crow+30:crow-30, ccol+30:ccol-30] = 0
+
+    # # Aplicar el filtro en el dominio de la frecuencia
+    # transformada_centrada *= mascara
+
+    # Invertir la Transformada de Fourier
+    f_ishift = np.fft.ifftshift(transformada_centrada)
+    resultado = np.fft.ifft2(f_ishift)
+    resultado = np.abs(resultado)
+    resultado = resultado.astype(np.uint8)
+
+    # # Mostrar la imagen filtrada
+    # plt.imshow(img_back, cmap='gray')
+    # plt.title('Imagen Filtrada con HPF')
+    # plt.show()
+    # Mostrar la imagen filtrada
+    comparar_resultados(imagen, resultado)
+
+def main():
+    # Analizar la primera imagen
+    area_amarilla1, imagen1 = analizar_imagen("im1_tp2.jpg")
+    area_amarilla2, imagen2 = analizar_imagen("im2_tp2.jpg")
+    
+    if area_amarilla1 > area_amarilla2:
+        print("La primera imagen tiene un área amarilla más grande.")
+    else:
+        print("La segunda imagen tiene un área amarilla más grande.")
+
+    # consignaF(imagen)
+
+main()
